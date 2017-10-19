@@ -1,54 +1,43 @@
 package com.thepoofy.kegerator.android.drivers;
 
-import com.google.android.things.pio.Gpio;
-
 import java.io.IOException;
 import java.util.Arrays;
 
 import timber.log.Timber;
+
+import static com.thepoofy.kegerator.android.helpers.BinaryUtils.booleanArrayToLong;
 
 /**
  * Adapted from HX711 http://image.dfrobot.com/image/data/SEN0160/hx711_english.pdf
  *
  * @author Will Vanderhoef
  */
-public class Hx711Driver {
-
-    private static final boolean HIGH = true;
-    private static final boolean LOW = false;
+public class Scale {
+    private static final int ITERATIONS_PER_READ = 10;
     private static final int WAKE_RETRY_LIMIT = 100;
+    private static final long GRAM_SCALE = 1992;
 
-    private final Gpio dat;
-    private final Gpio sck;
+    private final HX711 hx711;
 
-    public Hx711Driver(Gpio dat, Gpio sck) {
-        this.dat = dat;
-        this.sck = sck;
-    }
-
-    public static long booleanArrayToLong(boolean[] data) {
-        long value = 0;
-        for (boolean isTrue : data) {
-            value = (value << 1) + (isTrue ? 1 : 0);
-        }
-        return value;
+    public Scale(HX711 hx711) {
+        this.hx711 = hx711;
     }
 
     public void sleep() throws IOException {
         Timber.v("Attempting to sleep HX711.");
         // Setting the pin to HIGH for > 60 ums will put the controller in sleep mode.
-        writeSerialValue(LOW);
-        writeSerialValue(HIGH);
+
+        hx711.sleep();
     }
 
     public void wake() throws IOException {
         Timber.v("Attempting to wake HX711.");
         // if the controller is asleep, setting the pin to low will wake it.
-        writeSerialValue(LOW);
+        hx711.wake();
     }
 
     private boolean isReady() throws IOException {
-        return readSerialValue() == LOW;
+        return !hx711.readDat();
     }
 
     void ready() throws IOException {
@@ -72,33 +61,37 @@ public class Hx711Driver {
         // read the data from the sensor as 3 bytes (24 bits) through 24 pulses
         boolean[] data = new boolean[24];
         for (int i = 0; i < data.length; i++) {
-            writeSerialValue(HIGH);
-            data[i] = readSerialValue();
-            writeSerialValue(LOW);
+            hx711.pulseHighLow();
+            data[i] = hx711.readDat();
         }
 
         // send 25th pulse to end sequence, keeping device in 128 bit mode.
-        writeSerialValue(HIGH);
-        writeSerialValue(LOW);
+        hx711.pulseHighLow();
 
         Timber.v("Read value: %s", Arrays.toString(data));
 
         return booleanArrayToLong(data);
     }
 
-    /**
-     * @return True if value is HIGH
-     * @throws IOException on error reading value
-     */
-    private boolean readSerialValue() throws IOException {
-        return dat.getValue();
+    public void release() {
+        hx711.release();
     }
 
-    /**
-     * @param isHighValue True if HIGH
-     * @throws IOException on error writing value
-     */
-    private void writeSerialValue(boolean isHighValue) throws IOException {
-        sck.setValue(isHighValue);
+    public double getWeightUnscaled() throws IOException {
+        return getAverageValue(ITERATIONS_PER_READ);
+    }
+
+    public double getWeightInGrams() throws IOException {
+        return getAverageValue(ITERATIONS_PER_READ) / GRAM_SCALE;
+    }
+
+    public double getAverageValue(int iterationCount) throws IOException {
+        long sum = 0;
+        for (int i = 0; i < iterationCount; i++) {
+            long value = getValue();
+            Timber.i("value read from sensor=%s", value);
+            sum += value;
+        }
+        return sum / iterationCount;
     }
 }

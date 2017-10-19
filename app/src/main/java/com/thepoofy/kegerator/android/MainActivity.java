@@ -2,11 +2,15 @@ package com.thepoofy.kegerator.android;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.support.annotation.Nullable;
 
 import com.crashlytics.android.Crashlytics;
 import com.google.android.things.pio.I2cDevice;
 import com.google.android.things.pio.PeripheralManagerService;
-import com.thepoofy.kegerator.android.helpers.HX711GpioHelper;
+import com.thepoofy.kegerator.android.drivers.Scale;
+import com.thepoofy.kegerator.android.helpers.GpioHelper;
+import com.thepoofy.kegerator.android.helpers.PwmHelper;
+import com.thepoofy.kegerator.android.helpers.ScaleFactory;
 import com.thepoofy.kegerator.android.helpers.ThermistorI2cHelper;
 
 import java.io.IOException;
@@ -53,12 +57,15 @@ public class MainActivity extends Activity {
     private static final TimeUnit TIME_DELAY_UNIT = SECONDS;
 
     private final PeripheralManagerService peripherals = new PeripheralManagerService();
-    private final HX711GpioHelper hx711Helper = new HX711GpioHelper(peripherals);
+    private final ScaleFactory scaleFactory = new ScaleFactory(peripherals);
     private final ThermistorI2cHelper thermistorI2cHelper = new ThermistorI2cHelper(peripherals);
     private CompositeDisposable activityDisposables;
 
     private List<String> i2cAddresses;
     private List<I2cDevice> i2cDevices;
+
+    @Nullable
+    private Scale scale;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,11 +76,12 @@ public class MainActivity extends Activity {
 
         activityDisposables = new CompositeDisposable();
 
-        hx711Helper.logGpioList();
+        GpioHelper.logGpioAddresses(peripherals);
+        PwmHelper.logPwmAddresses(peripherals);
         i2cAddresses = thermistorI2cHelper.logI2cList();
 
         try {
-            hx711Helper.initScales();
+            scale = scaleFactory.createPwmScale();
             subscribeScaleData();
         } catch (IOException e) {
             Timber.w(e, "Error from HX711");
@@ -89,8 +97,16 @@ public class MainActivity extends Activity {
                                                           Schedulers.io())
                 .subscribe(timeElapsed -> {
                     if (!activityDisposables.isDisposed()) {
-                        Timber.i("Starting scale sensor read #%s", timeElapsed);
-                        hx711Helper.readScaleSensor();
+                        if (!activityDisposables.isDisposed()) {
+                            return;
+                        }
+
+                        if (scale != null) {
+                            Timber.i("Starting scale sensor read #%s", timeElapsed);
+                            scale.getValue();
+                        } else {
+                            activityDisposables.dispose();
+                        }
                     }
                 }, throwable -> {
                     Timber.e(throwable, "onError while reading scale data.");
@@ -147,7 +163,10 @@ public class MainActivity extends Activity {
 
         Timber.w("onDestroy called.");
 
-        hx711Helper.release();
+        if(scale != null) {
+            scale.release();
+            scale = null;
+        }
 
         i2cAddresses.clear();
         for (I2cDevice device : i2cDevices) {

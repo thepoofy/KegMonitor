@@ -2,7 +2,6 @@ package com.thepoofy.kegerator.android.helpers;
 
 import android.support.annotation.IntRange;
 import android.support.annotation.Nullable;
-import android.util.Log;
 
 import com.google.android.things.pio.I2cDevice;
 import com.google.android.things.pio.PeripheralManagerService;
@@ -18,7 +17,6 @@ import timber.log.Timber;
 
 public class ThermistorI2cHelper {
     public static final int DEFAULT_I2C_ADDRESS = 0x48;
-    private static final String TAG = HX711GpioHelper.class.getName();
     private static final int REG_BUFFER_BYTE_LIMIT = 2;
     private final PeripheralManagerService manager;
 
@@ -40,7 +38,7 @@ public class ThermistorI2cHelper {
         try {
             return manager.openI2cDevice(name, address);
         } catch (IOException e) {
-            Log.w(TAG, "Unable to access GPIO Input", e);
+            Timber.w("Unable to access I2C", e);
             return null;
         }
     }
@@ -50,7 +48,7 @@ public class ThermistorI2cHelper {
             try {
                 i2cDevice.close();
             } catch (IOException e) {
-                Log.w(TAG, "Error releasing gpio: ", e);
+                Timber.e(e, "Unable to release I2C");
             }
         }
     }

@@ -10,7 +10,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
  * @author wvanderhoef
  */
 
-public class Hx711DriverTest {
+public class Hx711GpioDriverTest {
 
     @Test
     public void booleanArrayToLong_whenEmpty_shouldReturnZero() {
@@ -18,7 +18,7 @@ public class Hx711DriverTest {
         boolean[] data = new boolean[]{};
 
         // when & then
-        assertThat(Hx711Driver.booleanArrayToLong(data), equalTo(0L));
+        assertThat(Hx711GpioDriver.booleanArrayToLong(data), equalTo(0L));
     }
 
     @Test
@@ -27,7 +27,7 @@ public class Hx711DriverTest {
         boolean[] data = new boolean[]{false, false, false};
 
         // when & then
-        assertThat(Hx711Driver.booleanArrayToLong(data), equalTo(0L));
+        assertThat(Hx711GpioDriver.booleanArrayToLong(data), equalTo(0L));
     }
 
     @Test
@@ -36,7 +36,7 @@ public class Hx711DriverTest {
         boolean[] data = new boolean[]{false, false, true};
 
         // when & then
-        assertThat(Hx711Driver.booleanArrayToLong(data), equalTo(1L));
+        assertThat(Hx711GpioDriver.booleanArrayToLong(data), equalTo(1L));
     }
 
     @Test
@@ -45,6 +45,6 @@ public class Hx711DriverTest {
         boolean[] data = new boolean[]{true, false, true};
 
         // when & then
-        assertThat(Hx711Driver.booleanArrayToLong(data), equalTo(5L));
+        assertThat(Hx711GpioDriver.booleanArrayToLong(data), equalTo(5L));
     }
 }
