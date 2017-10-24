@@ -32,6 +32,11 @@ public class ScaleFactory {
     }
 
     private Gpio configureGpioDat(String address) throws IOException {
+        List<String> gpioList = manager.getGpioList();
+        if (!gpioList.contains(address)) {
+            throw new IOException("Invalid GPIO Address Constants.");
+        }
+
         Timber.i("Registering GPIO DAT to address %s", address);
         Gpio dat = manager.openGpio(address);
         dat.setDirection(Gpio.DIRECTION_IN);
@@ -42,6 +47,11 @@ public class ScaleFactory {
     }
 
     private Gpio configureGpioSck(String address) throws IOException {
+        List<String> gpioList = manager.getGpioList();
+        if (!gpioList.contains(address)) {
+            throw new IOException("Invalid GPIO Address Constants.");
+        }
+
         Timber.i("Registering GPIO SCK to address %s", address);
         Gpio sck = manager.openGpio(address);
         sck.setDirection(Gpio.DIRECTION_OUT_INITIALLY_HIGH);
@@ -52,11 +62,21 @@ public class ScaleFactory {
     }
 
     private Pwm configurePwmSck(String address) throws IOException {
+        List<String> pwmList = manager.getPwmList();
+        if (!pwmList.contains(address)) {
+            throw new IOException("Invalid PWM Address Constants.");
+        }
+
         Timber.i("Registering PWM SCK to address %s", address);
         return manager.openPwm(address);
     }
 
     private SpiDevice configureSpiSck(String address) throws IOException {
+        List<String> spiList = manager.getSpiBusList();
+        if (!spiList.contains(SPI_SCK_ADDRESS)) {
+            throw new IOException("Invalid SPI Address Constants.");
+        }
+
         Timber.i("Registering SPI SCK to address %s", address);
         SpiDevice spiDevice = manager.openSpiDevice(address);
         spiDevice.setFrequency(25000);     // 25kHz == 40µs
@@ -68,11 +88,6 @@ public class ScaleFactory {
     }
 
     private Scale createGpioScale() throws IOException {
-        List<String> gpioList = manager.getGpioList();
-        if (!(gpioList.contains(GPIO_DAT_ADDRESS) && gpioList.contains(GPIO_SCK_ADDRESS))) {
-            throw new IOException("Invalid GPIO Constants.");
-        }
-
         Gpio dat = configureGpioDat(GPIO_DAT_ADDRESS);
         Gpio sck = configureGpioSck(GPIO_SCK_ADDRESS);
 
@@ -80,15 +95,6 @@ public class ScaleFactory {
     }
 
     private Scale createPwmScale() throws IOException {
-        List<String> gpioList = manager.getGpioList();
-        if (!gpioList.contains(GPIO_DAT_ADDRESS)) {
-            throw new IOException("Invalid GPIO Address Constants.");
-        }
-        List<String> pwmList = manager.getPwmList();
-        if (!pwmList.contains(PWM_SCK_ADDRESS)) {
-            throw new IOException("Invalid PWM Address Constants.");
-        }
-
         Gpio dat = configureGpioDat(GPIO_DAT_ADDRESS);
         Pwm sck = configurePwmSck(PWM_SCK_ADDRESS);
 
@@ -96,15 +102,6 @@ public class ScaleFactory {
     }
 
     private Scale createSpiScale() throws IOException {
-        List<String> gpioList = manager.getGpioList();
-        if (!gpioList.contains(GPIO_DAT_ADDRESS)) {
-            throw new IOException("Invalid GPIO Address Constants.");
-        }
-        List<String> spiList = manager.getSpiBusList();
-        if (!spiList.contains(SPI_SCK_ADDRESS)) {
-            throw new IOException("Invalid SPI Address Constants.");
-        }
-
         Gpio dat = configureGpioDat(GPIO_DAT_ADDRESS);
         SpiDevice sck = configureSpiSck(SPI_SCK_ADDRESS);
 
