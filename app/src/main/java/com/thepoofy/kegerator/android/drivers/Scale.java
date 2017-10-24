@@ -14,49 +14,73 @@ import static com.thepoofy.kegerator.android.helpers.BinaryUtils.booleanArrayToL
  */
 public class Scale {
     private static final int ITERATIONS_PER_READ = 10;
-    private static final int WAKE_RETRY_LIMIT = 100;
+    private static final int WAKE_RETRY_LIMIT = 10;
     private static final long GRAM_SCALE = 1992;
 
     private final HX711 hx711;
+    private final int iterationsPerRead;
+    private final long scale;
+
+    private int offset = 0;
 
     public Scale(HX711 hx711) {
         this.hx711 = hx711;
+        this.iterationsPerRead = ITERATIONS_PER_READ;
+        this.scale = GRAM_SCALE;
+    }
+
+    public Scale (HX711 hx711, int iterationsPerRead, long scale) {
+        this.hx711 = hx711;
+        this.iterationsPerRead = iterationsPerRead;
+        this.scale = scale;
+    }
+
+    /**
+     *
+     */
+    public void release() {
+        hx711.release();
+    }
+
+    /**
+     * @return
+     * @throws IOException
+     */
+    public double getWeightUnscaled() throws IOException {
+        return getAverageValue(iterationsPerRead);
+    }
+
+    /**
+     * @return
+     * @throws IOException
+     */
+    public double getWeightInGrams() throws IOException {
+        return getAverageValue(iterationsPerRead) / scale;
+    }
+
+    /**
+     * @param iterationCount
+     * @return
+     * @throws IOException
+     */
+    public double getAverageValue(int iterationCount) throws IOException {
+        long sum = 0;
+        for (int i = 0; i < iterationCount; i++) {
+            long value = getValue();
+            Timber.i("value read from sensor=%s", value);
+            sum += value;
+        }
+        return sum / iterationCount;
     }
 
     public void sleep() throws IOException {
-        Timber.v("Attempting to sleep HX711.");
-        // Setting the pin to HIGH for > 60 ums will put the controller in sleep mode.
-
         hx711.sleep();
     }
 
-    public void wake() throws IOException {
-        Timber.v("Attempting to wake HX711.");
-        // if the controller is asleep, setting the pin to low will wake it.
-        hx711.wake();
-    }
-
-    private boolean isReady() throws IOException {
-        return !hx711.readDat();
-    }
-
-    void ready() throws IOException {
-        int retryCount = 0;
-
-        do {
-            wake();
-            // read the serial value until it reports a LOW (false)
-            retryCount++;
-            if (isReady()) {
-                return;
-            }
-        } while (retryCount < WAKE_RETRY_LIMIT);
-
-        throw new IOException("Couldn't wake the device");
-    }
-
-    public long getValue() throws IOException {
+    long getValue() throws IOException {
         ready();
+
+        hx711.setupPulseMode();
 
         // read the data from the sensor as 3 bytes (24 bits) through 24 pulses
         boolean[] data = new boolean[24];
@@ -67,31 +91,29 @@ public class Scale {
 
         // send 25th pulse to end sequence, keeping device in 128 bit mode.
         hx711.pulseHighLow();
+        hx711.sleep();
 
-        Timber.v("Read value: %s", Arrays.toString(data));
-
+        Timber.i("Read value: %s", Arrays.toString(data));
         return booleanArrayToLong(data);
     }
 
-    public void release() {
-        hx711.release();
+    private void ready() throws IOException {
+        int retryCount = 0;
+
+        do {
+            hx711.wake();
+            // read the serial value until it reports a LOW (false)
+            retryCount++;
+            if (isReady()) {
+                Timber.i("Wake successful on attempt: %s", retryCount);
+                return;
+            }
+        } while (retryCount < WAKE_RETRY_LIMIT);
+
+        throw new IOException("Couldn't wake the device");
     }
 
-    public double getWeightUnscaled() throws IOException {
-        return getAverageValue(ITERATIONS_PER_READ);
-    }
-
-    public double getWeightInGrams() throws IOException {
-        return getAverageValue(ITERATIONS_PER_READ) / GRAM_SCALE;
-    }
-
-    public double getAverageValue(int iterationCount) throws IOException {
-        long sum = 0;
-        for (int i = 0; i < iterationCount; i++) {
-            long value = getValue();
-            Timber.i("value read from sensor=%s", value);
-            sum += value;
-        }
-        return sum / iterationCount;
+    private boolean isReady() throws IOException {
+        return !hx711.readDat();
     }
 }

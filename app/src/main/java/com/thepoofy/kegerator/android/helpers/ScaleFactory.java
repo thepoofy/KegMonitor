@@ -3,7 +3,8 @@ package com.thepoofy.kegerator.android.helpers;
 import com.google.android.things.pio.Gpio;
 import com.google.android.things.pio.PeripheralManagerService;
 import com.google.android.things.pio.Pwm;
-import com.thepoofy.kegerator.android.drivers.HX711;
+import com.google.android.things.pio.SpiDevice;
+import com.thepoofy.kegerator.android.drivers.HX711SpiDriver;
 import com.thepoofy.kegerator.android.drivers.Hx711GpioDriver;
 import com.thepoofy.kegerator.android.drivers.Hx711PwmDriver;
 import com.thepoofy.kegerator.android.drivers.Scale;
@@ -15,10 +16,15 @@ import timber.log.Timber;
 
 public class ScaleFactory {
 
-    private static final String GPIO_DAT_ADDRESS = "GPIO2_IO01";
-    private static final String GPIO_SCK_ADDRESS = "GPIO2_IO00";
-    private static final String PWM_SCK_ADDRESS = "PWM7";
+//    private static final String GPIO_DAT_ADDRESS = "GPIO2_IO01";
+//    private static final String GPIO_SCK_ADDRESS = "GPIO2_IO00";
+//    private static final String PWM_SCK_ADDRESS = "PWM7";
+//    private static final String SPI_SCK_ADDRESS = "SPI3";
 
+    private static final String GPIO_DAT_ADDRESS = "GPIO_32";
+    private static final String GPIO_SCK_ADDRESS = "GPIO_37";
+    private static final String PWM_SCK_ADDRESS = "PWM1";
+    private static final String SPI_SCK_ADDRESS = "SPI3.0";
     private final PeripheralManagerService manager;
 
     public ScaleFactory(PeripheralManagerService manager) {
@@ -50,7 +56,18 @@ public class ScaleFactory {
         return manager.openPwm(address);
     }
 
-    public Scale createGpioScale() throws IOException {
+    private SpiDevice configureSpiSck(String address) throws IOException {
+        Timber.i("Registering SPI SCK to address %s", address);
+        SpiDevice spiDevice = manager.openSpiDevice(address);
+        spiDevice.setFrequency(25000);     // 25kHz == 40µs
+        spiDevice.setMode(SpiDevice.MODE0);
+        spiDevice.setBitJustification(false);   // "endianness" false for most significant bit first
+        spiDevice.setBitsPerWord(8);
+
+        return spiDevice;
+    }
+
+    private Scale createGpioScale() throws IOException {
         List<String> gpioList = manager.getGpioList();
         if (!(gpioList.contains(GPIO_DAT_ADDRESS) && gpioList.contains(GPIO_SCK_ADDRESS))) {
             throw new IOException("Invalid GPIO Constants.");
@@ -62,7 +79,7 @@ public class ScaleFactory {
         return new Scale(new Hx711GpioDriver(dat, sck));
     }
 
-    public Scale createPwmScale() throws IOException {
+    private Scale createPwmScale() throws IOException {
         List<String> gpioList = manager.getGpioList();
         if (!gpioList.contains(GPIO_DAT_ADDRESS)) {
             throw new IOException("Invalid GPIO Address Constants.");
@@ -76,5 +93,39 @@ public class ScaleFactory {
         Pwm sck = configurePwmSck(PWM_SCK_ADDRESS);
 
         return new Scale(new Hx711PwmDriver(dat, sck));
+    }
+
+    private Scale createSpiScale() throws IOException {
+        List<String> gpioList = manager.getGpioList();
+        if (!gpioList.contains(GPIO_DAT_ADDRESS)) {
+            throw new IOException("Invalid GPIO Address Constants.");
+        }
+        List<String> spiList = manager.getSpiBusList();
+        if (!spiList.contains(SPI_SCK_ADDRESS)) {
+            throw new IOException("Invalid SPI Address Constants.");
+        }
+
+        Gpio dat = configureGpioDat(GPIO_DAT_ADDRESS);
+        SpiDevice sck = configureSpiSck(SPI_SCK_ADDRESS);
+
+        return new Scale(new HX711SpiDriver(dat, sck));
+    }
+
+    public Scale createScale(ScaleType type) throws IOException {
+        switch (type) {
+            case PWM:
+                return createPwmScale();
+            case GPIO:
+                return createGpioScale();
+            case SPI:
+                return createSpiScale();
+        }
+        throw new RuntimeException("Scale Type unknown.");
+    }
+
+    public enum ScaleType {
+        GPIO,
+        PWM,
+        SPI;
     }
 }

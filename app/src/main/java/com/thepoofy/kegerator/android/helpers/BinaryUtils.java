@@ -1,5 +1,9 @@
 package com.thepoofy.kegerator.android.helpers;
 
+import timber.log.Timber;
+
+import static java.lang.Byte.toUnsignedInt;
+
 /**
  * @author wvanderhoef
  */
@@ -12,4 +16,5 @@ public class BinaryUtils {
         }
         return value;
     }
+
 }

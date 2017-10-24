@@ -1,15 +1,14 @@
 package com.thepoofy.kegerator.android.drivers;
 
 import com.google.android.things.pio.Gpio;
-import com.thepoofy.kegerator.android.helpers.GpioHelper;
+import com.thepoofy.kegerator.android.helpers.CloseableHelper;
+import com.thepoofy.kegerator.android.helpers.Stopwatch;
 
 import java.io.IOException;
 
 import timber.log.Timber;
 
 /**
- * Adapted from HX711 http://image.dfrobot.com/image/data/SEN0160/hx711_english.pdf
- *
  * @author Will Vanderhoef
  */
 public class Hx711GpioDriver implements HX711 {
@@ -27,33 +26,53 @@ public class Hx711GpioDriver implements HX711 {
 
     @Override
     public void sleep() throws IOException {
-        Timber.v("Attempting to sleep HX711.");
-        // Setting the pin to HIGH for > 60 ums will put the controller in sleep mode.
-        sck.setValue(LOW);
-        sck.setValue(HIGH);
+        Timber.d("\t\tAttempting to sleep HX711.");
+        Stopwatch stopwatch = new Stopwatch();
+        writeValue(LOW);
+        stopwatch.clock();
+        writeValue(HIGH);
+        stopwatch.clock();
     }
 
     @Override
     public void wake() throws IOException {
-        Timber.v("Attempting to wake HX711.");
-        // if the controller is asleep, setting the pin to low will wake it.
-        sck.setValue(LOW);
+        Timber.d("\t\tAttempting to wake HX711.");
+        writeValue(LOW);
     }
 
     @Override
     public boolean readDat() throws IOException {
-        return dat.getValue();
+        return readValue();
+    }
+
+    @Override
+    public void setupPulseMode() throws IOException {
+
     }
 
     @Override
     public void pulseHighLow() throws IOException {
-        sck.setValue(HIGH);
-        sck.setValue(LOW);
+        Stopwatch stopwatch = new Stopwatch();
+        writeValue(HIGH);
+        stopwatch.clock();
+        writeValue(LOW);
+        stopwatch.clock();
     }
 
     @Override
     public void release() {
-        GpioHelper.release(dat);
-        GpioHelper.release(sck);
+        CloseableHelper.release(dat);
+        CloseableHelper.release(sck);
+    }
+
+    private boolean readValue() throws IOException {
+        boolean isHigh = dat.getValue();
+        Timber.d("\t\t\tget DAT: %s", isHigh);
+        return isHigh;
+    }
+
+    private void writeValue(boolean isHigh) throws IOException {
+        Timber.d("\t\t\tset SCK: %s", isHigh);
+        sck.setValue(isHigh);
     }
 }

@@ -4,29 +4,25 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 
-import com.crashlytics.android.Crashlytics;
-import com.google.android.things.pio.I2cDevice;
 import com.google.android.things.pio.PeripheralManagerService;
 import com.thepoofy.kegerator.android.drivers.Scale;
-import com.thepoofy.kegerator.android.helpers.GpioHelper;
-import com.thepoofy.kegerator.android.helpers.PwmHelper;
+import com.thepoofy.kegerator.android.drivers.ThermistorDriver;
+import com.thepoofy.kegerator.android.helpers.LoggingHelper;
 import com.thepoofy.kegerator.android.helpers.ScaleFactory;
 import com.thepoofy.kegerator.android.helpers.ThermistorI2cHelper;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import io.fabric.sdk.android.Fabric;
 import io.reactivex.Observable;
 import io.reactivex.disposables.CompositeDisposable;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.schedulers.Schedulers;
 import timber.log.Timber;
 
+import static com.thepoofy.kegerator.android.helpers.ScaleFactory.ScaleType.PWM;
 import static com.thepoofy.kegerator.android.helpers.ThermistorI2cHelper.DEFAULT_I2C_ADDRESS;
-import static java.lang.Byte.toUnsignedInt;
+import static com.thepoofy.kegerator.android.helpers.ThermistorI2cHelper.I2C_PIN;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
@@ -56,14 +52,17 @@ public class MainActivity extends Activity {
     private static final long TIME_DELAY = 5;
     private static final TimeUnit TIME_DELAY_UNIT = SECONDS;
 
+    private static boolean ENABLE_SCALE = true;
+    private static boolean ENABLE_THERMISTOR = false;
+
     private final PeripheralManagerService peripherals = new PeripheralManagerService();
     private final ScaleFactory scaleFactory = new ScaleFactory(peripherals);
     private final ThermistorI2cHelper thermistorI2cHelper = new ThermistorI2cHelper(peripherals);
-    private CompositeDisposable activityDisposables;
 
-    private List<String> i2cAddresses;
-    private List<I2cDevice> i2cDevices;
-
+    private Disposable scaleDisposable;
+    private Disposable thermistorDisposable;
+    @Nullable
+    private ThermistorDriver thermistor;
     @Nullable
     private Scale scale;
 
@@ -71,90 +70,79 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        Fabric.with(this, new Crashlytics());
+//        Fabric.with(this, new Crashlytics());
         Timber.plant(new Timber.DebugTree());
 
-        activityDisposables = new CompositeDisposable();
+        scaleDisposable = new CompositeDisposable();
+        thermistorDisposable = new CompositeDisposable();
 
-        GpioHelper.logGpioAddresses(peripherals);
-        PwmHelper.logPwmAddresses(peripherals);
-        i2cAddresses = thermistorI2cHelper.logI2cList();
+        LoggingHelper.logGpioAddresses(peripherals);
+        LoggingHelper.logPwmAddresses(peripherals);
+        LoggingHelper.logSpiAddresses(peripherals);
 
-        try {
-            scale = scaleFactory.createPwmScale();
-            subscribeScaleData();
-        } catch (IOException e) {
-            Timber.w(e, "Error from HX711");
-        }
+        startScale();
 
-        initThermistors();
-        subscribeThermistorData();
+        startThermistor();
     }
 
-    void subscribeScaleData() {
-        final Disposable disposable = Observable.interval(TIME_DELAY,
-                                                          TIME_DELAY_UNIT,
-                                                          Schedulers.io())
-                .subscribe(timeElapsed -> {
-                    if (!activityDisposables.isDisposed()) {
-                        if (!activityDisposables.isDisposed()) {
-                            return;
-                        }
+    private void startScale() {
+        if (ENABLE_SCALE) {
+            try {
+                scale = scaleFactory.createScale(PWM);
+                scale.sleep();
 
-                        if (scale != null) {
-                            Timber.i("Starting scale sensor read #%s", timeElapsed);
-                            scale.getValue();
-                        } else {
-                            activityDisposables.dispose();
-                        }
-                    }
-                }, throwable -> {
-                    Timber.e(throwable, "onError while reading scale data.");
-                    activityDisposables.dispose();
-                }, () -> {
-                    Timber.i("reading scale data has completed.");
-                    activityDisposables.dispose();
-                });
-        activityDisposables.add(disposable);
-    }
-
-    void initThermistors() {
-        i2cDevices = new ArrayList<>();
-        for (String i2cAddress : i2cAddresses) {
-            I2cDevice device = thermistorI2cHelper.register(i2cAddress, DEFAULT_I2C_ADDRESS);
-            if (device != null) {
-                i2cDevices.add(device);
+                subscribeScaleData(scale);
+            } catch (IOException e) {
+                Timber.w(e, "Error from Scale");
             }
         }
     }
 
-    void subscribeThermistorData() {
-        Disposable disposable = Observable.interval(TIME_DELAY, TIME_DELAY_UNIT, Schedulers.io())
-                .subscribe(timeElapsed -> {
-                    Timber.i("Starting thermistor sensor read #%s", timeElapsed);
-                    readThermistors();
-                }, t -> {
-                    Timber.e(t, "onError while reading thermistor data.");
-                }, () -> {
-                    Timber.i("reading thermistor data has completed.");
-                });
-
-        activityDisposables.add(disposable);
+    private void startThermistor() {
+        if (ENABLE_THERMISTOR) {
+            try {
+                thermistor = thermistorI2cHelper.register(I2C_PIN, DEFAULT_I2C_ADDRESS);
+                subscribeThermistorData(thermistor);
+            } catch (IOException e) {
+                Timber.w(e, "Error from Thermistor");
+            }
+        }
     }
 
-    void readThermistors() throws IOException {
-        for (int channel = 0; channel < i2cDevices.size(); channel++) {
-            I2cDevice device = i2cDevices.get(channel);
+    void subscribeScaleData(final Scale scale) {
+        scaleDisposable = Observable.interval(TIME_DELAY, TIME_DELAY_UNIT, Schedulers.io())
+                .subscribe(timeElapsed -> {
+                    if (!scaleDisposable.isDisposed()) {
+                        double averageValue = scale.getWeightInGrams();
+                        Timber.i("Scale weightInGrams=[%s]", averageValue);
+                    } else {
+                        Timber.w("Scale is disposed.");
+                    }
+                }, throwable -> {
+                    Timber.e(throwable, "onError while reading scale data.");
+                    scaleDisposable.dispose();
+                }, () -> {
+                    Timber.i("reading scale data has completed.");
+                    scaleDisposable.dispose();
+                });
+    }
 
-            // CHANNEL (0,1,2,3)
-            //byte[] data = thermistorI2cHelper.multipleBytes(device, channel);
-            byte data = thermistorI2cHelper.readByte(device, channel);
-
-            Timber.i("Data From i2c device=[%s] channel=[%s] data=[%s]",
-                     device.getName(),
-                     channel,
-                     toUnsignedInt(data));
-        }
+    void subscribeThermistorData(final ThermistorDriver thermistor) {
+        thermistorDisposable = Observable.interval(TIME_DELAY, TIME_DELAY_UNIT, Schedulers.io())
+                .subscribe(timeElapsed -> {
+                    if (!thermistorDisposable.isDisposed()) {
+                        Timber.i("Starting thermistor read #%s", timeElapsed);
+                        thermistor.read();
+                    } else {
+                        Timber.w("thermistor is disposed.");
+                    }
+                }, t -> {
+                    Timber.e(t, "onError while reading thermistor data.");
+                    thermistorDisposable.dispose();
+                }, () -> {
+                    Timber.i("reading thermistor data has completed.");
+                    thermistorDisposable.dispose();
+                });
     }
 
     @Override
@@ -163,16 +151,15 @@ public class MainActivity extends Activity {
 
         Timber.w("onDestroy called.");
 
-        if(scale != null) {
+        if (scale != null) {
             scale.release();
             scale = null;
         }
 
-        i2cAddresses.clear();
-        for (I2cDevice device : i2cDevices) {
-            thermistorI2cHelper.release(device);
-        }
+        thermistorI2cHelper.release(thermistor);
+        thermistor = null;
 
-        activityDisposables.dispose();
+        scaleDisposable.dispose();
+        thermistorDisposable.dispose();
     }
 }

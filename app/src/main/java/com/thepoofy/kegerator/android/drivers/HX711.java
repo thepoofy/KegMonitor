@@ -9,14 +9,24 @@ import java.io.IOException;
 public interface HX711 {
 
     /**
+     * if the controller is asleep, setting the pin to low will wake it.
+     *
      * @throws IOException on error writing value
      */
     void wake() throws IOException;
 
     /**
+     * Setting the pin to HIGH for > 60 ums will put the controller in sleep mode.
+     *
      * @throws IOException on error writing value
      */
     void sleep() throws IOException;
+
+    /**
+     *
+     * @throws IOException on error.
+     */
+    void setupPulseMode() throws IOException;
 
     /**
      * @throws IOException on error writing value
