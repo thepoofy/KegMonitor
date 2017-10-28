@@ -103,11 +103,14 @@ public class Scale {
         do {
             hx711.wake();
             // read the serial value until it reports a LOW (false)
-            retryCount++;
+
             if (isReady()) {
                 Timber.i("Wake successful on attempt: %s", retryCount);
                 return;
             }
+
+            hx711.sleep();
+            retryCount++;
         } while (retryCount < WAKE_RETRY_LIMIT);
 
         throw new IOException("Couldn't wake the device");

@@ -20,6 +20,8 @@ import io.reactivex.disposables.Disposable;
 import io.reactivex.schedulers.Schedulers;
 import timber.log.Timber;
 
+import static com.thepoofy.kegerator.android.helpers.ScaleFactory.ScaleType.GPIO;
+import static com.thepoofy.kegerator.android.helpers.ScaleFactory.ScaleType.HYBRID;
 import static com.thepoofy.kegerator.android.helpers.ScaleFactory.ScaleType.PWM;
 import static com.thepoofy.kegerator.android.helpers.ThermistorI2cHelper.DEFAULT_I2C_ADDRESS;
 import static com.thepoofy.kegerator.android.helpers.ThermistorI2cHelper.I2C_PIN;
@@ -88,7 +90,7 @@ public class MainActivity extends Activity {
     private void startScale() {
         if (ENABLE_SCALE) {
             try {
-                scale = scaleFactory.createScale(PWM);
+                scale = scaleFactory.createScale(GPIO);
                 scale.sleep();
 
                 subscribeScaleData(scale);

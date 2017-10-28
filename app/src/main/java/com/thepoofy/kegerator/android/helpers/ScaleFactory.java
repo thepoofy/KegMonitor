@@ -6,6 +6,7 @@ import com.google.android.things.pio.Pwm;
 import com.google.android.things.pio.SpiDevice;
 import com.thepoofy.kegerator.android.drivers.HX711SpiDriver;
 import com.thepoofy.kegerator.android.drivers.Hx711GpioDriver;
+import com.thepoofy.kegerator.android.drivers.Hx711HybridDriver;
 import com.thepoofy.kegerator.android.drivers.Hx711PwmDriver;
 import com.thepoofy.kegerator.android.drivers.Scale;
 
@@ -22,7 +23,7 @@ public class ScaleFactory {
 //    private static final String SPI_SCK_ADDRESS = "SPI3";
 
     private static final String GPIO_DAT_ADDRESS = "GPIO_32";
-    private static final String GPIO_SCK_ADDRESS = "GPIO_37";
+    private static final String GPIO_SCK_ADDRESS = "GPIO_35";
     private static final String PWM_SCK_ADDRESS = "PWM1";
     private static final String SPI_SCK_ADDRESS = "SPI3.0";
     private final PeripheralManagerService manager;
@@ -101,6 +102,14 @@ public class ScaleFactory {
         return new Scale(new Hx711PwmDriver(dat, sck));
     }
 
+    private Scale createHybridScale() throws IOException {
+        Gpio dat = configureGpioDat(GPIO_DAT_ADDRESS);
+        Gpio gpioSck = configureGpioSck(GPIO_SCK_ADDRESS);
+        Pwm pwmSck = configurePwmSck(PWM_SCK_ADDRESS);
+
+        return new Scale(new Hx711HybridDriver(dat, gpioSck, pwmSck));
+    }
+
     private Scale createSpiScale() throws IOException {
         Gpio dat = configureGpioDat(GPIO_DAT_ADDRESS);
         SpiDevice sck = configureSpiSck(SPI_SCK_ADDRESS);
@@ -112,6 +121,8 @@ public class ScaleFactory {
         switch (type) {
             case PWM:
                 return createPwmScale();
+            case HYBRID:
+                return createHybridScale();
             case GPIO:
                 return createGpioScale();
             case SPI:
@@ -122,6 +133,7 @@ public class ScaleFactory {
 
     public enum ScaleType {
         GPIO,
+        HYBRID,
         PWM,
         SPI;
     }
